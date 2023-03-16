@@ -4,6 +4,8 @@
 #include <gui/elements.h>
 #include <furi_hal_resources.h>
 
+#define READ_MODE_COUNT 2
+
 struct GpioReader {
     View* view;
     GpioReaderOkCallback callback;
@@ -11,6 +13,7 @@ struct GpioReader {
 };
 
 typedef struct {
+    uint8_t readmode;
     uint8_t pin_idx;
     bool pullUp[GPIO_ITEM_COUNT];
 } GpioReaderModel;
@@ -18,11 +21,29 @@ typedef struct {
 static bool gpio_reader_process_ok(GpioReader* gpio_reader, InputEvent* event);
 static bool gpio_reader_process_left(GpioReader* gpio_reader);
 static bool gpio_reader_process_right(GpioReader* gpio_reader);
+static bool gpio_reader_process_up(GpioReader* gpio_reader);
+static bool gpio_reader_process_down(GpioReader* gpio_reader);
+
+static void gpio_reader_init_mode(uint8_t readmode) {
+    if(readmode == 0) {
+        gpio_item_configure_all_pins(GpioModeInput);
+    } else if(readmode == 1) {
+        gpio_item_configure_all_pins(GpioModeAnalog);
+    }
+}
 
 static void gpio_reader_draw_callback(Canvas* canvas, void* _model) {
+    if(model->readmode == 0) {
+        gpio_reader_draw_digital(canvas, _model);
+    } else if(model->readmode == 1) {
+        gpio_reader_draw_analog(canvas, _model);
+    }
+}
+
+static void gpio_reader_draw_digital(Canvas* canvas, void* _model) {
     GpioReaderModel* model = _model;
     canvas_set_font(canvas, FontPrimary);
-    elements_multiline_text_aligned(canvas, 64, 2, AlignCenter, AlignTop, "GPIO Reader");
+    elements_multiline_text_aligned(canvas, 64, 2, AlignCenter, AlignTop, "GPIO Digital Reader");
     canvas_set_font(canvas, FontSecondary);
     elements_multiline_text_aligned(
         canvas, 64, 16, AlignCenter, AlignTop, "A7  A6  A4  B3  B2  C3  C1  C0");
@@ -54,7 +75,41 @@ static void gpio_reader_draw_callback(Canvas* canvas, void* _model) {
         
         charOffset += 16;
     }
-    //~ free(charOffset);
+}
+
+static void gpio_reader_draw_analog(Canvas* canvas, void* _model) {
+    GpioReaderModel* model = _model;
+    canvas_set_font(canvas, FontPrimary);
+    elements_multiline_text_aligned(canvas, 64, 2, AlignCenter, AlignTop, "GPIO Analog Reader");
+    canvas_set_font(canvas, FontSecondary);
+    elements_multiline_text_aligned(
+        canvas, 64, 16, AlignCenter, AlignTop, "A7  A6  A4  B3  B2  C3  C1  C0");
+    int charOffset = 10;
+    for(uint8_t i = 0; i < GPIO_ITEM_COUNT; i++) {
+        bool high = gpio_item_get_pin(i);
+        if(high) {
+            elements_multiline_text_aligned(
+                canvas, charOffset, 25, AlignCenter, AlignTop, "1");
+        } else {
+            elements_multiline_text_aligned(
+                canvas, charOffset, 25, AlignCenter, AlignTop, "0");
+        }
+        
+        if(model->pullUp[i]) {
+            elements_multiline_text_aligned(
+                canvas, charOffset, 50, AlignCenter, AlignTop, "1");
+        } else {
+            elements_multiline_text_aligned(
+                canvas, charOffset, 50, AlignCenter, AlignTop, "0");
+        }
+        if(i == model->pin_idx) {
+            elements_multiline_text_aligned(
+                canvas, charOffset, 53, AlignCenter, AlignTop, "_");
+        }
+
+        
+        charOffset += 16;
+    }
 }
 
 static bool gpio_reader_input_callback(InputEvent* event, void* context) {
@@ -67,6 +122,10 @@ static bool gpio_reader_input_callback(InputEvent* event, void* context) {
             consumed = gpio_reader_process_right(gpio_reader);
         } else if(event->key == InputKeyLeft) {
             consumed = gpio_reader_process_left(gpio_reader);
+        } else if(event->key == InputKeyUp) {
+            consumed = gpio_reader_process_up(gpio_reader);
+        } else if(event->key == InputKeyDown) {
+            consumed = gpio_reader_process_down(gpio_reader);
         }
     } else if(event->key == InputKeyOk) {
         consumed = gpio_reader_process_ok(gpio_reader, event);
@@ -95,6 +154,32 @@ static bool gpio_reader_process_right(GpioReader* gpio_reader) {
         {
             if(model->pin_idx < GPIO_ITEM_COUNT-1) {
                 model->pin_idx++;
+            }
+        },
+        true);
+    return true;
+}
+
+static bool gpio_reader_process_down(GpioReader* gpio_reader) {
+    with_view_model(
+        gpio_reader->view,
+        GpioReaderModel * model,
+        {
+            if(model->readmode) {
+                model->readmode--;
+            }
+        },
+        true);
+    return true;
+}
+
+static bool gpio_reader_process_up(GpioReader* gpio_reader) {
+    with_view_model(
+        gpio_reader->view,
+        GpioReaderModel * model,
+        {
+            if(model->readmode < READ_MODE_COUNT-1) {
+                model->readmode++;
             }
         },
         true);

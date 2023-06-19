@@ -5,6 +5,7 @@ App(
     entry_point="gpio_app",
     cdefines=["APP_GPIOREADER"],
     requires=["gui"],
+    fap_icon_assets="icons",
     stack_size=1 * 1024,
     order=50,
     fap_libs=["assets"],
